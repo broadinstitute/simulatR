@@ -30,11 +30,10 @@
 #' @param lambda_s Rate parameter of the Gamma-distributed sojourn interval. Defaults to 1.
 #' @param R Basic reproductive number. Defaults to 1.5.
 #' @param rho Overdispersion parameter of the offspring distribution. Defaults to Inf, indicating the offspring distribution is Poisson. If finite, the offspring distribution is taken to be Negative Binomial with a mean of R.
-#' @param growth Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.
 #' @param mu Evolution rate, in substitutions per site per day. Defaults to 1e-6.
 #' @param p Within-host mutation rate, in mutations per site per replication cycle. Note that mu/p gives equals number of replication cycles per day. Defaults to 5e-6.
 #' @param v The number of offspring produced per replication cycle.
-#' @param lambda_b The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.05.
+#' @param lambda_b The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.5.
 #' @param init_genome The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.
 #' @param sample_dp A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.
 #' @param sample_sb A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.
@@ -64,7 +63,7 @@ epi_sim <- function(
   mu = 1e-5,
   p = 5e-6,
   v = 1000, # virions produced per replication cycle
-  lambda_b = 1.05, # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
+  lambda_b = 1.5, # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
   init_genome = sample(c("A","C","G","T"), 10000, replace = T),
   sample_dp = function(n){rep(10000, n)},
   sample_sb = function(n){rep(0, n)},
