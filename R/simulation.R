@@ -41,6 +41,8 @@
 #' @param n_simulated The number of individuals to simulate. Defaults to 30.
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
+#' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
+#' @param seed_degrees If TRUE, the seed is set before each draw of the number of outgoing transmissions per person. Defaults to FALSE. If TRUE, seed must have an integer value.
 #' @return A directory containing a single FASTA for all simulated cases, a FASTA consisting of the reference genome, VCF files for each simulated case, and the times of sample collection relative to the inoculation time of the first case (in days).
 #' @export
 
@@ -70,8 +72,38 @@ epi_sim <- function(
   N = 1e6, # Population size
   n_simulated = 30,
   include_root = TRUE,
-  outdir = "my_epidemic"
+  outdir = "my_epidemic",
+  seed = NA,
+  seed_degrees = FALSE
 ){
+
+  a_g = 5
+  lambda_g = 1
+  a_s = 5
+  lambda_s = 1
+  R = 1.5
+  rho = Inf # Overdispersion parameter. Inf means Poisson distribution.
+  mu = 1e-5
+  p = 5e-6
+  v = 1000 # virions produced per replication cycle
+  lambda_b = 1.5 # Mean bottleneck size minus 1. Shifted Poisson distribution assumed.
+  init_genome = sample(c("A","C","G","T"), 10000, replace = T)
+  sample_dp = function(n){rep(10000, n)}
+  sample_sb = function(n){rep(0, n)}
+  N = 1e6 # Population size
+  n_simulated = 30
+  include_root = TRUE
+  outdir = "my_epidemic"
+  seed = 0
+  seed_degrees = T
+
+  if(is.na(seed) & seed_degrees){
+    stop("A seed must be specified when seed_degrees = TRUE.")
+  }
+
+  if(!is.na(seed)){
+    set.seed(seed)
+  }
 
   # "p" parameter in the Negative-Binomially distributed offspring distribution
   if(!is.infinite(rho)){
@@ -117,6 +149,9 @@ epi_sim <- function(
   props <- list(to_comp(init_genome))
 
   # Generate kids
+  if(seed_degrees){
+    set.seed(seed + id)
+  }
   if(is.infinite(rho)){
     n_kids <- rpois(1, R)
   }else{
@@ -129,10 +164,11 @@ epi_sim <- function(
     # What are their indices?
     who <- (n + 1):(n + n_kids)
 
+    id[who] <- sample(1:N, n_kids, replace = T)
     h[who] <- 1
     t[who] <- t[1] + pmax(rgamma(length(who), a_g, lambda_g), log(1/sqrt(p)) / (mu / p) / log(v) + 1/2) # To ensure positive evolutionary time
     s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-    id[who] <- sample(1:N, n_kids, replace = T)
+
 
     # Add kids to people who need to be accounted for
     checklist <- c(checklist, who)
@@ -160,7 +196,8 @@ epi_sim <- function(
     checklist <- setdiff(checklist, i)
 
     # If already infected previously, nothing to do here
-    if(id[i] %in% id[checklist]){
+    if(id[i] %in% id[complete]){
+      print("browut")
       checklist <- setdiff(checklist, i)
     }else{
       ## Inherited genotype
@@ -172,6 +209,9 @@ epi_sim <- function(
       props[[i]] <- evolve(props[[h[i]]], mu, delta_t, lambda_b, p_growth_mut, p)
 
       # Generate kids
+      if(seed_degrees){
+        set.seed(seed + id[i]) # To ensure seed changes after each iteration
+      }
       if(is.infinite(rho)){
         n_kids <- rpois(1, R)
       }else{
@@ -183,10 +223,11 @@ epi_sim <- function(
         # What are their indices?
         who <- (n + 1):(n + n_kids)
 
+        id[who] <- sample(1:N, n_kids, replace = T)
         h[who] <- i
         t[who] <- t[i] + pmax(rgamma(length(who), a_g, lambda_g), log(1/sqrt(p)) / (mu / p) / log(v) + 1/2) # To ensure positive evolutionary time
         s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-        id[who] <- sample(1:N, n_kids, replace = T)
+
 
         # Add kids to people who need to be accounted for
         checklist <- c(checklist, who)
@@ -235,7 +276,9 @@ epi_sim <- function(
   write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
 
   # Write the true transmission network and the times at which the transmissions occurred
-  trans <- data.frame(from = names[h[complete]], to = names, time = round(t[complete], digits = 3))[-1, ]
+  trans <- data.frame(from = paste0("person_", id[h]), to = paste0("person_", id), time = round(t, digits = 3))
+  trans <- trans[complete, ]
+  trans <- trans[-1, ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
 
@@ -248,7 +291,7 @@ epi_sim <- function(
   props <- props[complete]
   names(props) <- names
 
-  write.dna(props, file = paste0("./", outdir, "/aligned.fasta"), format = "fasta")
+  ape::write.dna(props, file = paste0("./", outdir, "/aligned.fasta"), format = "fasta")
 
   # Write ref genome
   ref <- list(init_genome)
