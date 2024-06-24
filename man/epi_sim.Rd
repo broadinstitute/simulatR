@@ -14,7 +14,7 @@ epi_sim(
   mu = 1e-05,
   p = 5e-06,
   v = 1000,
-  lambda_b = 1.05,
+  lambda_b = 1.5,
   init_genome = sample(c("A", "C", "G", "T"), 10000, replace = T),
   sample_dp = function(n) {
      rep(10000, n)
@@ -47,7 +47,7 @@ epi_sim(
 
 \item{v}{The number of offspring produced per replication cycle.}
 
-\item{lambda_b}{The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.05.}
+\item{lambda_b}{The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.5.}
 
 \item{init_genome}{The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.}
 
@@ -62,8 +62,6 @@ epi_sim(
 \item{include_root}{Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.}
 
 \item{outdir}{Name of the output directory. Defaults to "my_epidemic."}
-
-\item{growth}{Exponential growth rate of cases. Defaults to NULL. Exactly one of R and growth may be specified; the other must be set to NULL.}
 }
 \value{
 A directory containing a single FASTA for all simulated cases, a FASTA consisting of the reference genome, VCF files for each simulated case, and the times of sample collection relative to the inoculation time of the first case (in days).
