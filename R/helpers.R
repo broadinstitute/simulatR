@@ -94,6 +94,8 @@ write_vcf <- function(comp, id, outdir, init_genome, sample_dp, sample_sb){
       INFO = character(0)
     )
 
+    colnames(vcf)[1] <- "#CHROM"
+
     write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F)
 
   }else{
@@ -126,6 +128,8 @@ write_vcf <- function(comp, id, outdir, init_genome, sample_dp, sample_sb){
       FILTER = "PASS",
       INFO = info
     )
+
+    colnames(vcf)[1] <- "#CHROM"
 
     write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F)
 
