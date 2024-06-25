@@ -77,25 +77,25 @@ epi_sim <- function(
   seed_degrees = FALSE
 ){
 
-  a_g = 5
-  lambda_g = 1
-  a_s = 5
-  lambda_s = 1
-  R = 1.5
-  rho = Inf # Overdispersion parameter. Inf means Poisson distribution.
-  mu = 1e-5
-  p = 5e-6
-  v = 1000 # virions produced per replication cycle
-  lambda_b = 1.5 # Mean bottleneck size minus 1. Shifted Poisson distribution assumed.
-  init_genome = sample(c("A","C","G","T"), 10000, replace = T)
-  sample_dp = function(n){rep(10000, n)}
-  sample_sb = function(n){rep(0, n)}
-  N = 1e6 # Population size
-  n_simulated = 30
-  include_root = TRUE
-  outdir = "my_epidemic"
-  seed = 0
-  seed_degrees = T
+  # a_g = 5
+  # lambda_g = 1
+  # a_s = 5
+  # lambda_s = 1
+  # R = 1.5
+  # rho = Inf # Overdispersion parameter. Inf means Poisson distribution.
+  # mu = 1e-5
+  # p = 5e-6
+  # v = 1000 # virions produced per replication cycle
+  # lambda_b = 1.5 # Mean bottleneck size minus 1. Shifted Poisson distribution assumed.
+  # init_genome = sample(c("A","C","G","T"), 10000, replace = T)
+  # sample_dp = function(n){rep(10000, n)}
+  # sample_sb = function(n){rep(0, n)}
+  # N = 1e6 # Population size
+  # n_simulated = 30
+  # include_root = TRUE
+  # outdir = "my_epidemic"
+  # seed = 0
+  # seed_degrees = T
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
