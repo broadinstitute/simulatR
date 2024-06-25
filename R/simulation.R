@@ -272,7 +272,7 @@ epi_sim <- function(
   names <- paste0("person_", id[complete])
 
   # Write test date table
-  dates <- cbind(names, round(s[complete]))
+  dates <- cbind(names, round(s[complete] - s[1]))
   write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
 
   # Write the true transmission network and the times at which the transmissions occurred
@@ -291,6 +291,7 @@ epi_sim <- function(
   props <- props[complete]
   names(props) <- names
 
+  # Write aligned fasta
   if(length(complete) > 0){
     ape::write.dna(props, file = paste0("./", outdir, "/aligned.fasta"), format = "fasta")
   }else{
