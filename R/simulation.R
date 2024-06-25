@@ -297,8 +297,5 @@ epi_sim <- function(
   ref <- list(init_genome)
   names(ref) <- "reference_genome"
   write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
-
-
-
 }
 
