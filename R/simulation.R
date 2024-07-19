@@ -38,7 +38,7 @@
 #' @param sample_dp A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.
 #' @param sample_sb A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.
 #' @param N The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.
-#' @param n_simulated The number of individuals to simulate. Defaults to 30.
+#' @param t_max The number of days of epidemic to simulate. Defaults to 50.
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
 #' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
@@ -70,7 +70,7 @@ epi_sim <- function(
   sample_dp = function(n){rep(10000, n)},
   sample_sb = function(n){rep(0, n)},
   N = 1e6, # Population size
-  n_simulated = 30,
+  t_max = 50, # Number of days to simulate
   include_root = TRUE,
   outdir = "my_epidemic",
   seed = NA,
@@ -81,21 +81,21 @@ epi_sim <- function(
   # lambda_g = 1
   # a_s = 5
   # lambda_s = 1
-  # R = 1
+  # R = 1.5
   # rho = Inf # Overdispersion parameter. Inf means Poisson distribution.
   # mu = 1e-5
   # p = 5e-6
   # v = 1000 # virions produced per replication cycle
-  # lambda_b = 1.5 # Mean bottleneck size minus 1. Shifted Poisson distribution assumed.
+  # lambda_b = 1.5 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
   # init_genome = sample(c("A","C","G","T"), 10000, replace = T)
   # sample_dp = function(n){rep(10000, n)}
   # sample_sb = function(n){rep(0, n)}
   # N = 1e6 # Population size
-  # n_simulated = 30
-  # include_root = FALSE
+  # t_max = 50 # Number of days to simulate
+  # include_root = TRUE
   # outdir = "my_epidemic"
-  # seed = 0
-  # seed_degrees = T
+  # seed = NA
+  # seed_degrees = FALSE
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
@@ -189,7 +189,7 @@ epi_sim <- function(
   # People to be included in final outbreak output
   complete <- 1
 
-  while (length(complete) < n_simulated & length(checklist) > 0) {
+  while (ifelse(length(checklist) > 0, min(t[checklist]), Inf) < t_max) {
 
     # Next host to update is the one with the earliest infection time
     i <- checklist[which.min(t[checklist])]
@@ -237,18 +237,20 @@ epi_sim <- function(
 
       }
 
-
-
       # If nobody else in the queue is infected by h[i], convert to nucleotides, to save memory
       if(length(intersect(h[checklist], h[i])) == 0){
         props[[h[i]]] <- to_dna(props[[h[i]]])
       }
 
-      # Write vcf for i
-      write_vcf(props[[i]], id[i], outdir, init_genome, sample_dp, sample_sb)
-
       # People in output
       complete <- c(complete, i)
+
+      if(s[i] < t_max){
+        # Write vcf for i
+        write_vcf(props[[i]], id[i], outdir, init_genome, sample_dp, sample_sb)
+
+
+      }
 
       # Report progress
       if(length(complete) %% 10 == 0){
@@ -257,9 +259,17 @@ epi_sim <- function(
     }
   }
 
-  # Alert the user if the epidemic ends before reaching "n_simulated" cases
-  if(length(complete) < n_simulated){
-    message("The epidemic ended before reaching ", n_simulated, " cases. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
+  # Alert the user if the epidemic ends due to no children left
+  if(length(checklist) == 0){
+    message("The epidemic ended before reaching ", t_max, " days. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
+  }
+
+  # Remove from "complete" the people who were sampled after t_max
+  complete <- setdiff(complete, which(s > t_max))
+
+  # Remove root, if necessary
+  if(!include_root){
+    complete <- setdiff(complete, 1)
   }
 
   # Convert "props" to FASTA
@@ -278,15 +288,10 @@ epi_sim <- function(
   # Write the true transmission network and the times at which the transmissions occurred
   trans <- data.frame(from = paste0("person_", id[h]), to = paste0("person_", id), time = round(t, digits = 3))
   trans <- trans[complete, ]
-  trans <- trans[-1, ]
-  write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
-
-
-  # Remove root, if necessary
-  if(!include_root){
-    complete <- setdiff(complete, 1)
-    names <- setdiff(names, "person_1")
+  if(include_root){
+    trans <- trans[-1, ]
   }
+  write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
   props <- props[complete]
   names(props) <- names
