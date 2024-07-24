@@ -286,11 +286,13 @@ epi_sim <- function(
   write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
 
   # Write the true transmission network and the times at which the transmissions occurred
+  # Include intermediates who are not in "complete" because they were sampled after t_max
   trans <- data.frame(from = paste0("person_", id[h]), to = paste0("person_", id), time = round(t, digits = 3))
-  trans <- trans[complete, ]
-  if(include_root){
-    trans <- trans[-1, ]
-  }
+  #trans <- trans[complete, ]
+  # if(include_root){
+  #   trans <- trans[-1, ]
+  # }
+  trans <- trans[!is.na(trans$from), ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
   props <- props[complete]
