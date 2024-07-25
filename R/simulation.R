@@ -282,7 +282,7 @@ epi_sim <- function(
   names <- paste0("person_", id[complete])
 
   # Write test date table
-  dates <- cbind(names, round(s[complete] - s[1]))
+  dates <- cbind(names, round(s[complete]))
   write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
 
   # Write the true transmission network and the times at which the transmissions occurred
