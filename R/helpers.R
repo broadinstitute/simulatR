@@ -1,11 +1,28 @@
-# Evolve genome through exponential growth phase, starting from bottleneck
-evolve_site <- function(site, mu, delta_t, b, p_growth_mut, p){
+# Evolve genome through quiescent phase + bottleneck
+evolve_site_quiescent <- function(site, bot, mu, delta_t, b, g){
 
   # Evolve per JC model
-  site <- 1/4 + (site - 1/4)*exp((-4/3)*mu*delta_t)
+  if(delta_t > 0){
+    site <- 1/4 + (site - 1/4)*exp((-4/3)*mu*delta_t)
+  }else{
+    # If delta_t is negative, this means the transmission occurs before the end of the exponential growth phase.
+    # Duration of exponential growth phase is g
+    # So we need to take the weighted average of the proportions at the bottleneck (bot) and at end of exponential growth phase (site)
+    # Proportion of exp growth completed:
+    prop_growth <- (g + delta_t) / g
+    # Bottleneck converted to proportions
+    bot_prop <- bot / sum(bot)
+    # Back-evolve site
+    site <- site * prop_growth + bot_prop * (1 - prop_growth)
+  }
 
   # Sample bottleneck
   site <- rmultinom(1, b, site)[,1]
+
+  site
+}
+
+evolve_site_exp_growth <- function(site, p_growth_mut, p){
 
   # Does a mutation occur in the expo growth phase?
   denovo <- runif(1) < p_growth_mut
@@ -22,7 +39,7 @@ evolve_site <- function(site, mu, delta_t, b, p_growth_mut, p){
 
   # Proportions of each allele, not yet accounting for de novo mutations
   if(sum(site == 0) == 3){
-    site <- site / b
+    site <- site / sum(site)
   }else{
     site <- LaplacesDemon::rdirichlet(1, site)[1, ]
   }
@@ -40,14 +57,15 @@ evolve_site <- function(site, mu, delta_t, b, p_growth_mut, p){
 }
 
 
-# Evolve genome via Jukes-Cantor, then whatever happens in the exponential growth phase
-evolve <- function(comp, mu, delta_t, lambda_b, p_growth_mut, p){
-
-  # Bottleneck size
+# Evolve genome via Jukes-Cantor
+evolve_quiescent <- function(comp, bot, mu, delta_t, lambda_b, g){
   b <- rpois(1, lambda_b - 1) + 1
+  mapply(evolve_site_quiescent, comp, bot, MoreArgs = list(mu=mu, delta_t=delta_t, b=b, g), SIMPLIFY = F)
+}
 
-  lapply(comp, evolve_site, mu=mu, delta_t=delta_t, b=b, p_growth_mut=p_growth_mut, p=p)
-
+# Evolve genome in exponential growth phase
+evolve_exp_growth <- function(bot, p_growth_mut, p){
+  lapply(bot, evolve_site_exp_growth, p_growth_mut=p_growth_mut, p=p)
 }
 
 # Convert genome list to nucleotides
@@ -136,4 +154,5 @@ write_vcf <- function(comp, id, outdir, init_genome, sample_dp, sample_sb){
   }
 }
 
+# Number of consensus changes
 

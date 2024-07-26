@@ -82,20 +82,20 @@ epi_sim <- function(
   # a_s = 5
   # lambda_s = 1
   # R = 1.5
-  # rho = Inf # Overdispersion parameter. Inf means Poisson distribution.
+  # rho = 1 # Overdispersion parameter. Inf means Poisson distribution.
   # mu = 1e-5
-  # p = 5e-6
-  # v = 1000 # virions produced per replication cycle
+  # p = 1e-6
+  # v = exp(1) # virions produced per replication cycle
   # lambda_b = 1.5 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
-  # init_genome = sample(c("A","C","G","T"), 10000, replace = T)
+  # init_genome = rep("A", 10000)
   # sample_dp = function(n){rep(10000, n)}
   # sample_sb = function(n){rep(0, n)}
   # N = 1e6 # Population size
   # t_max = 50 # Number of days to simulate
-  # include_root = TRUE
+  # include_root = F
   # outdir = "my_epidemic"
-  # seed = NA
-  # seed_degrees = FALSE
+  # seed = 15
+  # seed_degrees = T
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
@@ -145,8 +145,9 @@ epi_sim <- function(
   # Times of test
   s <- rgamma(1, a_s, lambda_s)
 
-  # Proportions of particles of each nucleotide at each site
-  props <- list(to_comp(init_genome))
+  # Proportions of particles of each nucleotide at each site IN BOTTLENECK
+  bot <- list(to_comp(init_genome))
+  props <- list(evolve_exp_growth(bot[[1]], p_growth_mut, p))
 
   # Generate kids
   if(seed_degrees){
@@ -158,6 +159,8 @@ epi_sim <- function(
     n_kids <- rnbinom(1, rho, psi)
   }
 
+  diagnose <- c()
+  diagnose2 <- c()
 
   if(n_kids > 0){
 
@@ -166,7 +169,7 @@ epi_sim <- function(
 
     id[who] <- sample(1:N, n_kids, replace = T)
     h[who] <- 1
-    t[who] <- t[1] + pmax(rgamma(length(who), a_g, lambda_g), log(1/sqrt(p)) / (mu / p) / log(v) + 1/2) # To ensure positive evolutionary time
+    t[who] <- t[1] + rgamma(length(who), a_g, lambda_g)
     s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
 
 
@@ -205,8 +208,23 @@ epi_sim <- function(
       # Evolve this per JC
       delta_t <- t[i] - (t[h[i]] + log(1/sqrt(p)) / (mu / p) / log(v))
 
+      # Expected number of mutations X->Y per site per day
+      # (1 - (1-p)^(1/sqrt(p))) * mean(rbeta(10000, 1, sample(1:round(1/sqrt(p)), 10000, replace = T))) / (log(1/sqrt(p)) / (mu / p))
+
+      # Duration of exponential growth phase
+
+      # Expected number of mutations X->Y in exponential growth phase under JC:
+      # (1/4 - 1/4*exp((-4/3)*mu*log(1/sqrt(p)) / (mu / p) / log(v))) * 10000
+
+      # Duration of exponential growth phase
+      g <- log(1/sqrt(p)) / (mu / p) / log(v)
+
       # Evolution
-      props[[i]] <- evolve(props[[h[i]]], mu, delta_t, lambda_b, p_growth_mut, p)
+      bot[[i]] <- evolve_quiescent(props[[h[i]]], bot[[h[i]]], mu, delta_t, lambda_b, g)
+      props[[i]] <- evolve_exp_growth(bot[[i]], p_growth_mut, p)
+
+      diagnose[i] <- sum(to_dna(props[[i]]) != to_dna(props[[h[i]]])) / N_bases / (t[i] - t[h[i]])
+      diagnose2[i] <- sum(to_dna(props[[i]]) != "A") / N_bases / t[i]
 
       # Generate kids
       if(seed_degrees){
@@ -225,7 +243,7 @@ epi_sim <- function(
 
         id[who] <- sample(1:N, n_kids, replace = T)
         h[who] <- i
-        t[who] <- t[i] + pmax(rgamma(length(who), a_g, lambda_g), log(1/sqrt(p)) / (mu / p) / log(v) + 1/2) # To ensure positive evolutionary time
+        t[who] <- t[i] + rgamma(length(who), a_g, lambda_g)
         s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
 
 
@@ -240,6 +258,7 @@ epi_sim <- function(
       # If nobody else in the queue is infected by h[i], convert to nucleotides, to save memory
       if(length(intersect(h[checklist], h[i])) == 0){
         props[[h[i]]] <- to_dna(props[[h[i]]])
+        bot[[h[i]]] <- character(0)
       }
 
       # People in output
@@ -259,6 +278,8 @@ epi_sim <- function(
     }
   }
 
+
+
   # Alert the user if the epidemic ends due to no children left
   if(length(checklist) == 0){
     message("The epidemic ended before reaching ", t_max, " days. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
@@ -266,6 +287,12 @@ epi_sim <- function(
 
   # Remove from "complete" the people who were sampled after t_max
   complete <- setdiff(complete, which(s > t_max))
+
+  # hist(diagnose[complete])
+  # mean(diagnose[complete], na.rm = T)
+  #
+  # hist(diagnose2[complete])
+  # mean(diagnose2[complete], na.rm = T)
 
   # Remove root, if necessary
   if(!include_root){
