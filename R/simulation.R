@@ -38,7 +38,8 @@
 #' @param sample_dp A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.
 #' @param sample_sb A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.
 #' @param N The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.
-#' @param t_max The number of days of epidemic to simulate. Defaults to 50.
+#' @param p_samp The probability of being sampled. Defaults to 0.5.
+#' @param n_obs The number of sampled cases to generate. Defaults to 100.
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
 #' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
@@ -70,32 +71,13 @@ epi_sim <- function(
   sample_dp = function(n){rep(10000, n)},
   sample_sb = function(n){rep(0, n)},
   N = 1e6, # Population size
-  t_max = 50, # Number of days to simulate
+  p_samp = 0.5, # Probability of sampling
+  n_obs = 100, # Number of sampled individuals to simulate
   include_root = TRUE,
   outdir = "my_epidemic",
   seed = NA,
   seed_degrees = FALSE
 ){
-
-  # a_g = 5
-  # lambda_g = 1
-  # a_s = 5
-  # lambda_s = 1
-  # R = 1.5
-  # rho = 1 # Overdispersion parameter. Inf means Poisson distribution.
-  # mu = 1e-5
-  # p = 1e-6
-  # v = exp(1) # virions produced per replication cycle
-  # lambda_b = 1.5 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
-  # init_genome = rep("A", 10000)
-  # sample_dp = function(n){rep(10000, n)}
-  # sample_sb = function(n){rep(0, n)}
-  # N = 1e6 # Population size
-  # t_max = 50 # Number of days to simulate
-  # include_root = F
-  # outdir = "my_epidemic"
-  # seed = 15
-  # seed_degrees = T
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
@@ -142,8 +124,18 @@ epi_sim <- function(
   # Times of infection
   t <- 0
 
-  # Times of test
-  s <- rgamma(1, a_s, lambda_s)
+  # Time of test
+  if(runif(1) < p_samp){
+    s <- rgamma(1, a_s, lambda_s)
+
+    # If not including root, we need to generate an extra case, since this one's getting eliminated
+    if(!include_root){
+      n_obs <- n_obs + 1
+    }
+  }else{
+    s <- NA
+  }
+
 
   # Proportions of particles of each nucleotide at each site IN BOTTLENECK
   bot <- list(to_comp(init_genome))
@@ -159,8 +151,8 @@ epi_sim <- function(
     n_kids <- rnbinom(1, rho, psi)
   }
 
-  diagnose <- c()
-  diagnose2 <- c()
+  # Initialize maximum time of epidemic to Inf. We will revise this as we come close to the target number of sampled cases
+  t_max <- Inf
 
   if(n_kids > 0){
 
@@ -170,8 +162,14 @@ epi_sim <- function(
     id[who] <- sample(1:N, n_kids, replace = T)
     h[who] <- 1
     t[who] <- t[1] + rgamma(length(who), a_g, lambda_g)
-    s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
+    sampled <- runif(length(who)) < p_samp
+    s[who] <- NA
+    s[who][sampled] <- t[who][sampled] + rgamma(sum(sampled), a_s, lambda_s)
 
+    # If the total number of sampled individuals is >= n_obs, update the time at which we stop simulating the epidemic
+    if(sum(!is.na(s)) >= n_obs){
+      t_max <- sort(s[!is.na(s)])[n_obs]
+    }
 
     # Add kids to people who need to be accounted for
     checklist <- c(checklist, who)
@@ -185,12 +183,12 @@ epi_sim <- function(
   checklist <- setdiff(checklist, 1)
 
   # Write vcf for 1
-  if(include_root){
+  if(include_root & !is.na(s[1])){
     write_vcf(props[[1]], id[1], outdir, init_genome, sample_dp, sample_sb)
   }
 
-  # People to be included in final outbreak output
-  complete <- 1
+  # Number of cases generated thus far
+  n_gen <- 0
 
   while (ifelse(length(checklist) > 0, min(t[checklist]), Inf) < t_max) {
 
@@ -199,8 +197,8 @@ epi_sim <- function(
     checklist <- setdiff(checklist, i)
 
     # If already infected previously, nothing to do here
-    if(id[i] %in% id[complete]){
-      print("browut")
+    if(id[i] %in% id[which(t < t[i])]){
+      #print("browut")
       checklist <- setdiff(checklist, i)
     }else{
       ## Inherited genotype
@@ -208,23 +206,12 @@ epi_sim <- function(
       # Evolve this per JC
       delta_t <- t[i] - (t[h[i]] + log(1/sqrt(p)) / (mu / p) / log(v))
 
-      # Expected number of mutations X->Y per site per day
-      # (1 - (1-p)^(1/sqrt(p))) * mean(rbeta(10000, 1, sample(1:round(1/sqrt(p)), 10000, replace = T))) / (log(1/sqrt(p)) / (mu / p))
-
-      # Duration of exponential growth phase
-
-      # Expected number of mutations X->Y in exponential growth phase under JC:
-      # (1/4 - 1/4*exp((-4/3)*mu*log(1/sqrt(p)) / (mu / p) / log(v))) * 10000
-
       # Duration of exponential growth phase
       g <- log(1/sqrt(p)) / (mu / p) / log(v)
 
       # Evolution
       bot[[i]] <- evolve_quiescent(props[[h[i]]], bot[[h[i]]], mu, delta_t, lambda_b, g)
       props[[i]] <- evolve_exp_growth(bot[[i]], p_growth_mut, p)
-
-      diagnose[i] <- sum(to_dna(props[[i]]) != to_dna(props[[h[i]]])) / N_bases / (t[i] - t[h[i]])
-      diagnose2[i] <- sum(to_dna(props[[i]]) != "A") / N_bases / t[i]
 
       # Generate kids
       if(seed_degrees){
@@ -244,8 +231,14 @@ epi_sim <- function(
         id[who] <- sample(1:N, n_kids, replace = T)
         h[who] <- i
         t[who] <- t[i] + rgamma(length(who), a_g, lambda_g)
-        s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
+        sampled <- runif(length(who)) < p_samp
+        s[who] <- NA
+        s[who][sampled] <- t[who][sampled] + rgamma(sum(sampled), a_s, lambda_s)
 
+        # If the total number of sampled individuals is >= n_obs, update the time at which we stop simulating the epidemic
+        if(sum(!is.na(s)) >= n_obs){
+          t_max <- sort(s[!is.na(s)])[n_obs]
+        }
 
         # Add kids to people who need to be accounted for
         checklist <- c(checklist, who)
@@ -262,18 +255,18 @@ epi_sim <- function(
       }
 
       # People in output
-      complete <- c(complete, i)
+      #complete <- c(complete, i)
 
-      if(s[i] < t_max){
+      if(!is.na(s[i])){
         # Write vcf for i
         write_vcf(props[[i]], id[i], outdir, init_genome, sample_dp, sample_sb)
-
-
       }
 
+      n_gen <- n_gen + 1
+
       # Report progress
-      if(length(complete) %% 10 == 0){
-        message(length(complete), " cases generated")
+      if(n_gen %% 10 == 0){
+        message(n_gen, " cases generated")
       }
     }
   }
@@ -282,17 +275,11 @@ epi_sim <- function(
 
   # Alert the user if the epidemic ends due to no children left
   if(length(checklist) == 0){
-    message("The epidemic ended before reaching ", t_max, " days. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
+    message("The epidemic ended before reaching ", n_obs, " people. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
   }
 
-  # Remove from "complete" the people who were sampled after t_max
-  complete <- setdiff(complete, which(s > t_max))
-
-  # hist(diagnose[complete])
-  # mean(diagnose[complete], na.rm = T)
-  #
-  # hist(diagnose2[complete])
-  # mean(diagnose2[complete], na.rm = T)
+  # Cases that we report: sampled cases before (or equal) to t_max
+  complete <- which(!is.na(s) & s <= t_max)
 
   # Remove root, if necessary
   if(!include_root){
@@ -315,10 +302,7 @@ epi_sim <- function(
   # Write the true transmission network and the times at which the transmissions occurred
   # Include intermediates who are not in "complete" because they were sampled after t_max
   trans <- data.frame(from = paste0("person_", id[h]), to = paste0("person_", id), time = round(t, digits = 3))
-  #trans <- trans[complete, ]
-  # if(include_root){
-  #   trans <- trans[-1, ]
-  # }
+
   trans <- trans[!is.na(trans$from), ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 

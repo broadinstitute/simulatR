@@ -23,7 +23,8 @@ epi_sim(
      rep(0, n)
  },
   N = 1e+06,
-  n_simulated = 30,
+  p_samp = 0.5,
+  n_obs = 100,
   include_root = TRUE,
   outdir = "my_epidemic",
   seed = NA,
@@ -59,7 +60,9 @@ epi_sim(
 
 \item{N}{The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.}
 
-\item{n_simulated}{The number of individuals to simulate. Defaults to 30.}
+\item{p_samp}{The probability of being sampled. Defaults to 0.5.}
+
+\item{n_obs}{The number of sampled cases to generate. Defaults to 100.}
 
 \item{include_root}{Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.}
 
