@@ -79,6 +79,27 @@ epi_sim <- function(
   seed_degrees = FALSE
 ){
 
+  # a_g = 5
+  # lambda_g = 1
+  # a_s = 5
+  # lambda_s = 1
+  # R = 2
+  # rho = 2 # Overdispersion parameter. Inf means Poisson distribution.
+  # mu = 1e-5
+  # p = 1e-6
+  # v = exp(1) # virions produced per replication cycle
+  # lambda_b = 1.01 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
+  # init_genome = rep("A", 10000)
+  # sample_dp = function(n){rep(10000, n)}
+  # sample_sb = function(n){rep(0, n)}
+  # N = 1e6 # Population size
+  # p_samp = 0.5 # Probability of sampling
+  # n_obs = 100 # Number of sampled individuals to simulate
+  # include_root = TRUE
+  # outdir = "my_epidemic"
+  # seed = 20
+  # seed_degrees = T
+
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
   }
@@ -97,7 +118,6 @@ epi_sim <- function(
 
   # Length of viral genome
   N_bases = length(init_genome)
-
 
   # Set up output directories
   if(dir.exists(outdir)){
@@ -125,15 +145,13 @@ epi_sim <- function(
   t <- 0
 
   # Time of test
-  if(runif(1) < p_samp){
-    s <- rgamma(1, a_s, lambda_s)
+  s <- rgamma(1, a_s, lambda_s)
 
-    # If not including root, we need to generate an extra case, since this one's getting eliminated
-    if(!include_root){
-      n_obs <- n_obs + 1
-    }
-  }else{
-    s <- NA
+  sampled <- runif(1) < p_samp
+
+  # If not including root, we need to generate an extra case, since this one's getting eliminated
+  if(!include_root & sampled){
+    n_obs <- n_obs + 1
   }
 
 
@@ -154,6 +172,7 @@ epi_sim <- function(
   # Initialize maximum time of epidemic to Inf. We will revise this as we come close to the target number of sampled cases
   t_max <- Inf
 
+
   if(n_kids > 0){
 
     # What are their indices?
@@ -162,14 +181,8 @@ epi_sim <- function(
     id[who] <- sample(1:N, n_kids, replace = T)
     h[who] <- 1
     t[who] <- t[1] + rgamma(length(who), a_g, lambda_g)
-    sampled <- runif(length(who)) < p_samp
-    s[who] <- NA
-    s[who][sampled] <- t[who][sampled] + rgamma(sum(sampled), a_s, lambda_s)
-
-    # If the total number of sampled individuals is >= n_obs, update the time at which we stop simulating the epidemic
-    if(sum(!is.na(s)) >= n_obs){
-      t_max <- sort(s[!is.na(s)])[n_obs]
-    }
+    s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
+    sampled[who] <- runif(length(who)) < p_samp
 
     # Add kids to people who need to be accounted for
     checklist <- c(checklist, who)
@@ -183,14 +196,14 @@ epi_sim <- function(
   checklist <- setdiff(checklist, 1)
 
   # Write vcf for 1
-  if(include_root & !is.na(s[1])){
+  if(include_root){
     write_vcf(props[[1]], id[1], outdir, init_genome, sample_dp, sample_sb)
   }
 
   # Number of cases generated thus far
   n_gen <- 0
 
-  while (ifelse(length(checklist) > 0, min(t[checklist]), Inf) < t_max) {
+  while (min(t[checklist]) < ifelse(length(s[sampled]) >= n_obs, sort(s[sampled])[n_obs], Inf)) {
 
     # Next host to update is the one with the earliest infection time
     i <- checklist[which.min(t[checklist])]
@@ -231,14 +244,8 @@ epi_sim <- function(
         id[who] <- sample(1:N, n_kids, replace = T)
         h[who] <- i
         t[who] <- t[i] + rgamma(length(who), a_g, lambda_g)
-        sampled <- runif(length(who)) < p_samp
-        s[who] <- NA
-        s[who][sampled] <- t[who][sampled] + rgamma(sum(sampled), a_s, lambda_s)
-
-        # If the total number of sampled individuals is >= n_obs, update the time at which we stop simulating the epidemic
-        if(sum(!is.na(s)) >= n_obs){
-          t_max <- sort(s[!is.na(s)])[n_obs]
-        }
+        s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
+        sampled[who] <- runif(length(who)) < p_samp
 
         # Add kids to people who need to be accounted for
         checklist <- c(checklist, who)
@@ -271,7 +278,7 @@ epi_sim <- function(
     }
   }
 
-
+  t_max <- sort(s[sampled])[n_obs]
 
   # Alert the user if the epidemic ends due to no children left
   if(length(checklist) == 0){
@@ -279,7 +286,9 @@ epi_sim <- function(
   }
 
   # Cases that we report: sampled cases before (or equal) to t_max
-  complete <- which(!is.na(s) & s <= t_max)
+  complete <- which(sampled & s <= t_max)
+
+  print(paste("With perfect sampling,", sum(s <= t_max), "cases would have been sampled by time t_max."))
 
   # Remove root, if necessary
   if(!include_root){
