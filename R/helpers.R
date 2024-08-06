@@ -154,5 +154,15 @@ write_vcf <- function(comp, id, outdir, init_genome, sample_dp, sample_sb){
   }
 }
 
-# Number of consensus changes
-
+# DFS traversal of tree, lowest number first
+dfs <- function(h){
+  stack <- 1
+  explored <- c()
+  while (length(stack) > 0) {
+    who <- sort(which(h == stack[1]))
+    explored <- c(explored, stack[1])
+    stack <- stack[-1]
+    stack <- c(who, stack)
+  }
+  return(explored)
+}

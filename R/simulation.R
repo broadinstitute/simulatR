@@ -329,5 +329,81 @@ epi_sim <- function(
   ref <- list(init_genome)
   names(ref) <- "reference_genome"
   ape::write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
+
+  ## Plotting
+
+  # Figure out who's included
+  included <- 1
+  for (i in complete) {
+    anc <- i
+    while(!(anc %in% included)){
+      included <- c(included, anc)
+      anc <- h[anc]
+    }
+  }
+
+  print(paste("Number of included hosts:", length(included)))
+
+  h_comp <- match(h, included)[included]
+  t_comp <- t[included]
+  n <- length(h_comp)
+  ord <- rev(dfs(h_comp))
+
+  leaves <- which(!(1:n %in% h_comp))
+  n_leaves <- length(leaves)
+
+  # Angle of each node
+  thetas <- c()
+  leaf_count <- 0
+
+  for (i in ord) {
+    if(!(i %in% leaves)){
+      kids <- which(h_comp == i)
+      thetas[i] <- mean(thetas[kids])
+    }else{
+      thetas[i] <- leaf_count * 2 * pi / n_leaves
+      leaf_count <- leaf_count + 1
+    }
+  }
+
+  df_standard <- data.frame(x =t_comp, y = thetas)
+
+
+  # vertical segments
+  xs <- c()
+  ystart <- c()
+  yend <- c()
+  if(include_root){
+    who <- 1:n
+  }else{
+    who <- 2:n
+    df_standard <- df_standard[-1, ]
+  }
+  for (i in who) {
+    kids <- which(h_comp == i)
+    if(length(kids) > 0){
+      xs <- c(xs, t_comp[i])
+      ystart <- c(ystart, min(thetas[kids]))
+      yend <- c(yend, max(thetas[kids]))
+    }
+  }
+
+  colors <- rep('black', length(who))
+  colors[!(included[who] %in% complete)] <- 'gray'
+
+  big <- ggplot2::ggplot() +
+    ggplot2::geom_segment(mapping = ggplot2::aes(x = (t_comp[h_comp])[-1], xend = t_comp[-1], y = thetas[-1], yend = thetas[-1]), linewidth = 0.5) +
+    ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
+    ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y, color = colors), size = 1) +
+    ggplot2::xlab("Evolutionary Time (days)") +
+    ggplot2::scale_y_continuous(breaks = NULL) +
+    ggplot2::scale_color_manual(values = c("black", "gray")) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      axis.title.y = ggplot2::element_blank(),
+      legend.position='none'
+    )
+  print(big)
+
 }
 
