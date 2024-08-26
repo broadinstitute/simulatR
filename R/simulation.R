@@ -79,26 +79,26 @@ epi_sim <- function(
   seed_degrees = FALSE
 ){
 
-  # a_g = 5
-  # lambda_g = 1
-  # a_s = 5
-  # lambda_s = 1
-  # R = 2
-  # rho = 2 # Overdispersion parameter. Inf means Poisson distribution.
-  # mu = 1e-5
-  # p = 1e-6
-  # v = exp(1) # virions produced per replication cycle
-  # lambda_b = 1.01 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
-  # init_genome = rep("A", 10000)
-  # sample_dp = function(n){rep(10000, n)}
-  # sample_sb = function(n){rep(0, n)}
-  # N = 1e6 # Population size
-  # p_samp = 0.5 # Probability of sampling
-  # n_obs = 100 # Number of sampled individuals to simulate
-  # include_root = TRUE
-  # outdir = "my_epidemic"
-  # seed = 20
-  # seed_degrees = T
+  a_g = 5
+  lambda_g = 1
+  a_s = 5
+  lambda_s = 1
+  R = 2
+  rho = 2 # Overdispersion parameter. Inf means Poisson distribution.
+  mu = 1e-5
+  p = 1e-6
+  v = exp(1) # virions produced per replication cycle
+  lambda_b = 1.01 # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
+  init_genome = rep("A", 10000)
+  sample_dp = function(n){rep(10000, n)}
+  sample_sb = function(n){rep(0, n)}
+  N = 1e6 # Population size
+  p_samp = 0.5 # Probability of sampling
+  n_obs = 100 # Number of sampled individuals to simulate
+  include_root = TRUE
+  outdir = "my_epidemic"
+  seed = 20
+  seed_degrees = T
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
@@ -159,6 +159,9 @@ epi_sim <- function(
   bot <- list(to_comp(init_genome))
   props <- list(evolve_exp_growth(bot[[1]], p_growth_mut, p))
 
+  # True reproductive number
+  true_Rs <- c()
+
   # Generate kids
   if(seed_degrees){
     set.seed(seed + id)
@@ -168,6 +171,7 @@ epi_sim <- function(
   }else{
     n_kids <- rnbinom(1, rho, psi)
   }
+  true_Rs <- c(true_Rs, n_kids)
 
   # Initialize maximum time of epidemic to Inf. We will revise this as we come close to the target number of sampled cases
   t_max <- Inf
@@ -236,6 +240,8 @@ epi_sim <- function(
         n_kids <- rnbinom(1, rho, psi)
       }
 
+      true_Rs <- c(true_Rs, n_kids)
+
       if(n_kids > 0){
 
         # What are their indices?
@@ -289,6 +295,7 @@ epi_sim <- function(
   complete <- which(sampled & s <= t_max)
 
   print(paste("With perfect sampling,", sum(s <= t_max), "cases would have been sampled by time t_max."))
+  print(paste("Realized reproductive number:", mean(true_Rs)))
 
   # Remove root, if necessary
   if(!include_root){
