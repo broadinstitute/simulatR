@@ -31,7 +31,7 @@
 #' @param R Basic reproductive number. Defaults to 1.5.
 #' @param psi Second parameter of the Negative Binomial distribution.
 #' @param mu Evolution rate, in substitutions per site per day. Defaults to 1e-6.
-#' @param N_eff The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(1000)
+#' @param N_eff The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(100).
 #' @param init_genome The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.
 #' @param sample_dp A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.
 #' @param sample_sb A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.
@@ -441,26 +441,45 @@ epi_sim <- function(
       }
 
 
-      # If the "to" is the same as the root sequence, from <- to, to <- bot
-      if(to == init_genome[s]){
-        to <- bot[s]
-        af <- 1 - prop_mut[s]
+      # If the root sequence is the same as either the bottleneck or the "to", only need to create one entry in VCF
+      if(init_genome[s] == to | init_genome[s] == bot[s]){
+        if(to == init_genome[s]){
+          to <- bot[s]
+          af <- 1 - prop_mut[s]
+        }else{
+          af <- prop_mut[s]
+        }
+        from <- init_genome[s]
+
+        # If iSNV frequency within LOD, report it
+        if(af > min_af & af < 1 - min_af){
+          isnv_to <- c(isnv_to, to)
+          isnv_from <- c(isnv_from, from)
+          isnv_pos <- c(isnv_pos, s)
+          isnv_af <- c(isnv_af, af)
+        }
+
+        # If necessary, update bottleneck to consensus sequence
+        if(af > 0.5){
+          bot[s] <- to
+        }
       }else{
-        af <- prop_mut[s]
-      }
-      from <- init_genome[s]
+        # Otherwise, need one for each addition
+        to1 <- to
+        af1 <- prop_mut[s]
+        to2 <- bot[s]
+        af2 <- 1 - af1 # Guaranteed to be within LOD
 
-      # If iSNV frequency within LOD, report it
-      if(af > min_af & af < 1 - min_af){
-        isnv_to <- c(isnv_to, to)
-        isnv_from <- c(isnv_from, from)
-        isnv_pos <- c(isnv_pos, s)
-        isnv_af <- c(isnv_af, af)
-      }
+        from <- init_genome[s]
 
-      # If necessary, update bottleneck to consensus sequence
-      if(af > 0.5){
-        bot[s] <- to
+        isnv_to <- c(isnv_to, to1, to2)
+        isnv_from <- c(isnv_from, from, from)
+        isnv_pos <- c(isnv_pos, s, s)
+        isnv_af <- c(isnv_af, af1, af2)
+
+        if(af1 > 0.5){
+          bot[s] <- to
+        }
       }
     }
 

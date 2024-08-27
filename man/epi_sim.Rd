@@ -45,7 +45,7 @@ epi_sim(
 
 \item{mu}{Evolution rate, in substitutions per site per day. Defaults to 1e-6.}
 
-\item{N_eff}{The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(1000)}
+\item{N_eff}{The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(100).}
 
 \item{init_genome}{The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.}
 
