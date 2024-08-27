@@ -29,14 +29,13 @@
 #' @param a_s Shape parameter of the Gamma-distributed sojourn interval (time from inoculation to receiving a diagnostic test. Defaults to 5.
 #' @param lambda_s Rate parameter of the Gamma-distributed sojourn interval. Defaults to 1.
 #' @param R Basic reproductive number. Defaults to 1.5.
-#' @param rho Overdispersion parameter of the offspring distribution. Defaults to Inf, indicating the offspring distribution is Poisson. If finite, the offspring distribution is taken to be Negative Binomial with a mean of R.
+#' @param psi Second parameter of the Negative Binomial distribution.
 #' @param mu Evolution rate, in substitutions per site per day. Defaults to 1e-6.
-#' @param p Within-host mutation rate, in mutations per site per replication cycle. Note that mu/p gives equals number of replication cycles per day. Defaults to 5e-6.
-#' @param v The number of offspring produced per replication cycle.
-#' @param lambda_b The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.5.
+#' @param N_eff The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(1000)
 #' @param init_genome The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.
 #' @param sample_dp A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.
 #' @param sample_sb A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.
+#' @param min_af Limit of detection for within-host variant frequencies.
 #' @param N The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.
 #' @param p_samp The probability of being sampled. Defaults to 0.5.
 #' @param n_obs The number of sampled cases to generate. Defaults to 100.
@@ -61,15 +60,14 @@ epi_sim <- function(
   lambda_g = 1,
   a_s = 5,
   lambda_s = 1,
-  R = 1.5,
-  rho = Inf, # Overdispersion parameter. Inf means Poisson distribution.
-  mu = 1e-5,
-  p = 5e-6,
-  v = 1000, # virions produced per replication cycle
-  lambda_b = 1.5, # Mean bottleneck size, minus 1. Shifted Poisson distribution assumed.
+  R = 2,
+  psi = 0.5,
+  mu = 2e-5,
+  N_eff = log(1000), # Within-host N_eff
   init_genome = sample(c("A","C","G","T"), 10000, replace = T),
   sample_dp = function(n){rep(10000, n)},
   sample_sb = function(n){rep(0, n)},
+  min_af = 0.03, # Limit of detection for within host variants
   N = 1e6, # Population size
   p_samp = 0.5, # Probability of sampling
   n_obs = 100, # Number of sampled individuals to simulate
@@ -79,6 +77,25 @@ epi_sim <- function(
   seed_degrees = FALSE
 ){
 
+  # a_g = 5
+  # lambda_g = 1
+  # a_s = 5
+  # lambda_s = 1
+  # R = 2
+  # psi = 0.5
+  # mu = 2e-5
+  # N_eff = log(100)
+  # init_genome = sample(c("A","C","G","T"), 10000, replace = T)
+  # sample_dp = function(n){rep(10000, n)}
+  # sample_sb = function(n){rep(0, n)}
+  # N = 1e6
+  # p_samp = 0.5
+  # n_obs = 100
+  # include_root = FALSE
+  # outdir = "my_epidemic"
+  # seed = 6
+  # seed_degrees = TRUE
+
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
   }
@@ -87,13 +104,7 @@ epi_sim <- function(
     set.seed(seed)
   }
 
-  # "p" parameter in the Negative-Binomially distributed offspring distribution
-  if(!is.infinite(rho)){
-    psi = rho / (R + rho)
-  }
-
-  # Probability of a mutation in exponential growth phase, at a given site
-  p_growth_mut = 1 - (1-p)^(1/sqrt(p))
+  rho <- R * psi / (1 - psi)
 
   # Length of viral genome
   N_bases = length(init_genome)
@@ -132,11 +143,6 @@ epi_sim <- function(
   if(!include_root & sampled){
     n_obs <- n_obs + 1
   }
-
-
-  # Proportions of particles of each nucleotide at each site IN BOTTLENECK
-  bot <- list(to_comp(init_genome))
-  props <- list(evolve_exp_growth(bot[[1]], p_growth_mut, p))
 
   # True reproductive number
   true_Rs <- c()
@@ -178,11 +184,6 @@ epi_sim <- function(
   # We filled in the data for host 1, so remove it from the checklist
   checklist <- setdiff(checklist, 1)
 
-  # Write vcf for 1
-  if(include_root){
-    write_vcf(props[[1]], id[1], outdir, init_genome, sample_dp, sample_sb)
-  }
-
   # Number of cases generated thus far
   n_gen <- 0
 
@@ -198,16 +199,6 @@ epi_sim <- function(
       checklist <- setdiff(checklist, i)
     }else{
       ## Inherited genotype
-
-      # Evolve this per JC
-      delta_t <- t[i] - (t[h[i]] + log(1/sqrt(p)) / (mu / p) / log(v))
-
-      # Duration of exponential growth phase
-      g <- log(1/sqrt(p)) / (mu / p) / log(v)
-
-      # Evolution
-      bot[[i]] <- evolve_quiescent(props[[h[i]]], bot[[h[i]]], mu, delta_t, lambda_b, g)
-      props[[i]] <- evolve_exp_growth(bot[[i]], p_growth_mut, p)
 
       # Generate kids
       if(seed_degrees){
@@ -240,20 +231,6 @@ epi_sim <- function(
 
       }
 
-      # If nobody else in the queue is infected by h[i], convert to nucleotides, to save memory
-      if(length(intersect(h[checklist], h[i])) == 0){
-        props[[h[i]]] <- to_dna(props[[h[i]]])
-        bot[[h[i]]] <- character(0)
-      }
-
-      # People in output
-      #complete <- c(complete, i)
-
-      if(!is.na(s[i])){
-        # Write vcf for i
-        write_vcf(props[[i]], id[i], outdir, init_genome, sample_dp, sample_sb)
-      }
-
       n_gen <- n_gen + 1
 
       # Report progress
@@ -281,13 +258,6 @@ epi_sim <- function(
     complete <- setdiff(complete, 1)
   }
 
-  # Convert "props" to FASTA
-  for (i in complete) {
-    if(typeof(props[[i]]) != "character"){
-      props[[i]] <- to_dna(props[[i]])
-    }
-  }
-
   names <- paste0("person_", id[complete])
 
   # Write test date table
@@ -301,21 +271,6 @@ epi_sim <- function(
   trans <- trans[!is.na(trans$from), ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
-  props <- props[complete]
-  names(props) <- names
-
-  # Write aligned fasta
-  if(length(complete) > 0){
-    ape::write.dna(props, file = paste0("./", outdir, "/aligned.fasta"), format = "fasta")
-  }else{
-    file.create(paste0("./", outdir, "/aligned.fasta"))
-  }
-
-  # Write ref genome
-  ref <- list(init_genome)
-  names(ref) <- "reference_genome"
-  ape::write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
-
   ## Plotting
 
   # Figure out who's included
@@ -327,6 +282,209 @@ epi_sim <- function(
       anc <- h[anc]
     }
   }
+
+  # BFS order of included hosts on tree
+  ord <- bfs(1, h, included)
+
+  # Mutations
+  mut_times <- list()
+  mut_sites <- list()
+  mut_from <- list()
+  mut_to <- list()
+
+  mut_times[[1]] <- numeric(0)
+  mut_sites[[1]] <- integer(0)
+  mut_from[[1]] <- character(0)
+  mut_to[[1]] <- character(0)
+
+  # Record total evolutionary time and number of mutations
+  tot_evo_time <- 0
+  tot_n_mut <- 0
+
+  for (i in ord[2:length(ord)]) {
+
+    # Time difference, bottleneck to bottleneck
+    delta_t <- t[i] - t[h[i]]
+    tot_evo_time <- tot_evo_time + delta_t
+
+    # Number of mutations
+    n_mut <- rpois(1, mu * delta_t * length(init_genome))
+    tot_n_mut <- tot_n_mut + n_mut
+
+    if(n_mut == 0){
+      mut_times[[i]] <- numeric(0)
+      mut_sites[[i]] <- integer(0)
+      mut_from[[i]] <- character(0)
+      mut_to[[i]] <- character(0)
+    }else{
+      # Times at which they occur
+      mut_times[[i]] <- sort(runif(n_mut, t[h[i]], t[i]))
+
+      # Sites at which they occur
+      mut_sites[[i]] <- sample(1:length(init_genome), n_mut, replace = T)
+
+      # For from and to, need to get current nucleotide at that position
+      anc <- ancestry(h[i], h)
+
+      mut_from[[i]] <- character(0)
+      mut_to[[i]] <- character(0)
+
+      for (j in 1:n_mut) {
+        prev_sites <- unlist(mut_sites[anc])
+        if(j > 1){
+          prev_sites <- c(prev_sites, mut_sites[[i]][1:(j-1)])
+        }
+        if(mut_sites[[i]][j] %in% prev_sites){
+          # Index of latest occurence of the site mutating
+          ind_latest <- max(which(prev_sites == mut_sites[[i]][j]))
+          prev_to <- unlist(mut_to[anc])
+          if(j > 1){
+            prev_to <- c(prev_to, mut_to[[i]][1:(j-1)])
+          }
+          mut_from[[i]][j] <- prev_to[ind_latest]
+          mut_to[[i]][j] <- sample(setdiff(c("A", "C", "G", "T"), prev_to[ind_latest]), 1)
+        }else{
+          mut_from[[i]][j] <- init_genome[mut_sites[[i]][j]]
+          mut_to[[i]][j] <- sample(setdiff(c("A", "C", "G", "T"), init_genome[mut_sites[[i]][j]]), 1)
+        }
+      }
+    }
+  }
+
+  print(paste("Total evolutionary time:", round(tot_evo_time), "days"))
+  print(paste("Total number of mutations:", tot_n_mut))
+
+  cons <- list()
+
+  ## Now, generate within-host variants. Only needed now for cases we output
+  for (i in complete) {
+    # Time of first mutation at each site, after the bottleneck
+    t_1st_mut <- F_denovo_inv(runif(length(init_genome)), mu, N_eff)
+
+    # But some of these positions will have already mutated based on what we drew in the previous step
+    # Children of i
+    js <- intersect(which(h == i), included)
+
+    # Sites at which mutations occur in these js
+    sites <- unlist(mut_sites[js])
+    # Times at which they occur past the bottleneck
+    ts <- unlist(mut_times[js]) - t[i]
+    # What nucleotide we mutate to
+    tos <- unlist(mut_to[js])
+
+    # Which sites have detected iSNVs that get passed on?
+    trans_isnv_sites <- c()
+
+    # And what did said sites mutate into?
+    trans_isnv_tos <- c()
+
+    if(length(sites) > 0){
+      for (s in unique(sites)) {
+        # First time of a mutation at site s that gets transmitted onwards
+
+        # This is a vector of all times we get a mutation at site s in host i that gets passed on
+        t_mut <- ts[which(sites == s)]
+
+        # The one recorded is the minimum of t_mut, which occurs at which.min(t_mut)
+        # The "to" allele is tos[which(sites== s)], the "to" allele for sites matching s
+        to <- (tos[which(sites == s)])[which.min(t_mut)]
+
+        # We only care about the first time of the mutation past the bottleneck
+        t_mut <- min(t_mut)
+
+        # If it's before what we already sampled, update t_1st_mut, and record this fact
+        if(t_mut < t_1st_mut[s]){
+          # print(t_mut)
+          # print(t_1st_mut[s])
+          t_1st_mut[s] <- t_mut
+          trans_isnv_sites <- c(trans_isnv_sites, s)
+          trans_isnv_tos <- c(trans_isnv_tos, to)
+        }
+      }
+    }
+
+    # Proportion of the viral population that's mutated
+    prop_mut <- 1 / exp(N_eff * t_1st_mut)
+
+    # Which of these sites have proportions that are above LOD?
+    # This step just saves time: we would never record proporitons under LOD anyway
+    above_lod <- which(prop_mut > min_af)
+
+    ## Get genome at bottleneck
+
+    # Ancestry
+    anc <- ancestry(i, h)
+
+    # Sites that mutate (can replace old vectors called sites and tos; now unneccary)
+    sites <- unlist(mut_sites[anc])
+    tos <- unlist(mut_to[anc])
+    bot <- init_genome
+
+    if(length(sites) > 0){
+      for (s in 1:length(sites)) {
+        bot[sites[s]] <- tos[s]
+      }
+    }
+
+    # Loop over sites with detected iSNVs
+    isnv_from <- c()
+    isnv_pos <- c()
+    isnv_to <- c()
+    isnv_af <- c()
+    for (s in above_lod) {
+      # If s is a site in transmitted iSNVs, we already know the "to" allele
+      if(s %in% trans_isnv_sites){
+        print("Hooray! There's iSNV evidence for a transmission!")
+        to <- trans_isnv_tos[which(trans_isnv_sites == s)]
+      }else{
+        to <- sample(setdiff(c("A", "C", "G", "T"), bot[s]), 1)
+      }
+
+
+      # If the "to" is the same as the root sequence, from <- to, to <- bot
+      if(to == init_genome[s]){
+        to <- bot[s]
+        af <- 1 - prop_mut[s]
+      }else{
+        af <- prop_mut[s]
+      }
+      from <- init_genome[s]
+
+      # If iSNV frequency within LOD, report it
+      if(af > min_af & af < 1 - min_af){
+        isnv_to <- c(isnv_to, to)
+        isnv_from <- c(isnv_from, from)
+        isnv_pos <- c(isnv_pos, s)
+        isnv_af <- c(isnv_af, af)
+      }
+
+      # If necessary, update bottleneck to consensus sequence
+      if(af > 0.5){
+        bot[s] <- to
+      }
+    }
+
+    # Write VCF
+    write_vcf(isnv_pos, isnv_af, isnv_from, isnv_to, id[i], outdir, sample_dp, sample_sb)
+
+    # Append consensus sequence
+    cons[[i]] <- bot
+  }
+
+  cons_complete <- cons[complete]
+  names(cons_complete) <- paste0("person_", id[complete])
+
+  # Write aligned fasta
+  if(length(complete) > 0){
+    ape::write.dna(cons_complete, file = paste0("./", outdir, "/aligned.fasta"), format = "fasta")
+  }else{
+    file.create(paste0("./", outdir, "/aligned.fasta"))
+  }
+
+  # Write ref genome
+  ref <- list(init_genome)
+  names(ref) <- "reference_genome"
+  ape::write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
 
   print(paste("Number of included hosts:", length(included)))
 

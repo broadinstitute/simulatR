@@ -9,12 +9,10 @@ epi_sim(
   lambda_g = 1,
   a_s = 5,
   lambda_s = 1,
-  R = 1.5,
-  rho = Inf,
-  mu = 1e-05,
-  p = 5e-06,
-  v = 1000,
-  lambda_b = 1.5,
+  R = 2,
+  psi = 0.5,
+  mu = 2e-05,
+  N_eff = log(1000),
   init_genome = sample(c("A", "C", "G", "T"), 10000, replace = T),
   sample_dp = function(n) {
      rep(10000, n)
@@ -22,6 +20,7 @@ epi_sim(
   sample_sb = function(n) {
      rep(0, n)
  },
+  min_af = 0.03,
   N = 1e+06,
   p_samp = 0.5,
   n_obs = 100,
@@ -42,21 +41,19 @@ epi_sim(
 
 \item{R}{Basic reproductive number. Defaults to 1.5.}
 
-\item{rho}{Overdispersion parameter of the offspring distribution. Defaults to Inf, indicating the offspring distribution is Poisson. If finite, the offspring distribution is taken to be Negative Binomial with a mean of R.}
+\item{psi}{Second parameter of the Negative Binomial distribution.}
 
 \item{mu}{Evolution rate, in substitutions per site per day. Defaults to 1e-6.}
 
-\item{p}{Within-host mutation rate, in mutations per site per replication cycle. Note that mu/p gives equals number of replication cycles per day. Defaults to 5e-6.}
-
-\item{v}{The number of offspring produced per replication cycle.}
-
-\item{lambda_b}{The mean number of particles per transmission bottleneck. A shifted Poisson distribution is assumed, i.e. the bottleneck size is 1 + Poisson(lambda_b - 1). Defaults to 1.5.}
+\item{N_eff}{The within-host effective population size, expressed as the number of virions at time t ie exp(N_eff * t). Defaults to log(1000)}
 
 \item{init_genome}{The initial genome present in the seed of the epidemic. Defaults to a genome consisting of 1e4 random draws from A, C, G, T.}
 
 \item{sample_dp}{A function with one argument, n, that randomly samples n read depths. Defaults to the function that always returns a constant depth of 10,000 reads.}
 
 \item{sample_sb}{A function with one argument, n, that randomly samples n strand biases. Defaults to the function that always returns a constant strand bias of 0.}
+
+\item{min_af}{Limit of detection for within-host variant frequencies.}
 
 \item{N}{The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.}
 
