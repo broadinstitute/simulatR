@@ -22,7 +22,7 @@ write_vcf <- function(pos, af, ref, alt, id, outdir, sample_dp, sample_sb){
 
     colnames(vcf)[1] <- "#CHROM"
 
-    write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F)
+    write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F, sep = "\t")
 
   }else{
 
@@ -55,7 +55,7 @@ write_vcf <- function(pos, af, ref, alt, id, outdir, sample_dp, sample_sb){
 
     colnames(vcf)[1] <- "#CHROM"
 
-    write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F)
+    write.table(vcf, file = paste0("./", outdir, "/vcf/person_", id, ".vcf"), quote = F, col.names = T, row.names = F, sep = "\t")
 
   }
 }
