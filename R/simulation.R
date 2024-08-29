@@ -404,7 +404,7 @@ epi_sim <- function(
     }
 
     # Proportion of the viral population that's mutated
-    prop_mut <- 1 / exp(N_eff * t_1st_mut)
+    prop_mut <- rbeta(length(init_genome), 1, exp(N_eff * t_1st_mut))
 
     # Which of these sites have proportions that are above LOD?
     # This step just saves time: we would never record proporitons under LOD anyway
@@ -434,7 +434,7 @@ epi_sim <- function(
     for (s in above_lod) {
       # If s is a site in transmitted iSNVs, we already know the "to" allele
       if(s %in% trans_isnv_sites){
-        print("Hooray! There's iSNV evidence for a transmission!")
+        #print("Hooray! There's iSNV evidence for a transmission!")
         to <- trans_isnv_tos[which(trans_isnv_sites == s)]
       }else{
         to <- sample(setdiff(c("A", "C", "G", "T"), bot[s]), 1)
