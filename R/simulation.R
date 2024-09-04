@@ -40,6 +40,7 @@
 #' @param p_samp The probability of being sampled. Defaults to 0.5.
 #' @param n_obs The number of sampled cases to generate. Defaults to 100.
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
+#' @param start_date Date on which the first case is inoculated. Defaults to January 1st, 2000.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
 #' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
 #' @param seed_degrees If TRUE, the seed is set before each draw of the number of outgoing transmissions per person. Defaults to FALSE. If TRUE, seed must have an integer value.
@@ -72,29 +73,32 @@ epi_sim <- function(
   p_samp = 0.5, # Probability of sampling
   n_obs = 100, # Number of sampled individuals to simulate
   include_root = TRUE,
+  start_date = as.Date("2000-01-01"),
   outdir = "my_epidemic",
   seed = NA,
   seed_degrees = FALSE
 ){
 
-  # a_g = 5
-  # lambda_g = 1
-  # a_s = 5
-  # lambda_s = 1
-  # R = 2
-  # psi = 0.5
-  # mu = 2e-5
-  # N_eff = log(100)
-  # init_genome = sample(c("A","C","G","T"), 10000, replace = T)
-  # sample_dp = function(n){rep(10000, n)}
-  # sample_sb = function(n){rep(0, n)}
-  # N = 1e6
-  # p_samp = 0.5
-  # n_obs = 100
-  # include_root = FALSE
-  # outdir = "my_epidemic"
-  # seed = 6
-  # seed_degrees = TRUE
+  a_g = 5
+  lambda_g = 1
+  a_s = 5
+  lambda_s = 1
+  R = 2
+  psi = 0.5
+  mu = 2e-5
+  N_eff = log(100)
+  init_genome = sample(c("A","C","G","T"), 10000, replace = T)
+  sample_dp = function(n){rep(10000, n)}
+  sample_sb = function(n){rep(0, n)}
+  min_af = 0.03
+  N = 1e6
+  p_samp = 0.5
+  n_obs = 100
+  include_root = FALSE
+  start_date = as.Date("2000-01-01")
+  outdir = "my_epidemic"
+  seed = 6
+  seed_degrees = TRUE
 
   if(is.na(seed) & seed_degrees){
     stop("A seed must be specified when seed_degrees = TRUE.")
@@ -261,8 +265,8 @@ epi_sim <- function(
   names <- paste0("person_", id[complete])
 
   # Write test date table
-  dates <- cbind(names, round(s[complete]))
-  write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
+  dates <- cbind(names, paste(start_date + round(s[complete])))
+  #write.csv(dates, file = paste0("./", outdir, "/date.csv"), row.names = F, quote = F)
 
   # Write the true transmission network and the times at which the transmissions occurred
   # Include intermediates who are not in "complete" because they were sampled after t_max
@@ -358,8 +362,13 @@ epi_sim <- function(
 
   ## Now, generate within-host variants. Only needed now for cases we output
   for (i in complete) {
-    # Time of first mutation at each site, after the bottleneck
-    t_1st_mut <- F_denovo_inv(runif(length(init_genome)), mu, N_eff)
+
+    # REMEMBER: N_eff = lambda / rho
+    # lambda = growth rate per generation
+    # rho = generation interval
+
+    # Size of population at time of first mutation at each site, after the bottleneck
+    size_1st_mut <- 1 + N_eff * rexp(length(init_genome), mu)
 
     # But some of these positions will have already mutated based on what we drew in the previous step
     # Children of i
@@ -369,6 +378,7 @@ epi_sim <- function(
     sites <- unlist(mut_sites[js])
     # Times at which they occur past the bottleneck
     ts <- unlist(mut_times[js]) - t[i]
+
     # What nucleotide we mutate to
     tos <- unlist(mut_to[js])
 
@@ -392,11 +402,14 @@ epi_sim <- function(
         # We only care about the first time of the mutation past the bottleneck
         t_mut <- min(t_mut)
 
+        # Size of the population when this mutation occurs
+        pop_size <- exp(N_eff * t_mut)
+
         # If it's before what we already sampled, update t_1st_mut, and record this fact
-        if(t_mut < t_1st_mut[s]){
+        if(pop_size < size_1st_mut[s]){
           # print(t_mut)
           # print(t_1st_mut[s])
-          t_1st_mut[s] <- t_mut
+          size_1st_mut[s] <- pop_size
           trans_isnv_sites <- c(trans_isnv_sites, s)
           trans_isnv_tos <- c(trans_isnv_tos, to)
         }
@@ -404,7 +417,7 @@ epi_sim <- function(
     }
 
     # Proportion of the viral population that's mutated
-    prop_mut <- rbeta(length(init_genome), 1, exp(N_eff * t_1st_mut))
+    prop_mut <- rbeta(length(init_genome), 1, size_1st_mut)
 
     # Which of these sites have proportions that are above LOD?
     # This step just saves time: we would never record proporitons under LOD anyway
@@ -491,7 +504,7 @@ epi_sim <- function(
   }
 
   cons_complete <- cons[complete]
-  names(cons_complete) <- paste0("person_", id[complete])
+  names(cons_complete) <- paste0("person_", id[complete], "|blah-blah-blah|", dates[,2])
 
   # Write aligned fasta
   if(length(complete) > 0){
@@ -506,6 +519,10 @@ epi_sim <- function(
   ape::write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
 
   print(paste("Number of included hosts:", length(included)))
+
+
+
+  ### PLOTTING
 
   h_comp <- match(h, included)[included]
   t_comp <- t[included]
