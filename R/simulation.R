@@ -43,7 +43,6 @@
 #' @param start_date Date on which the first case is inoculated. Defaults to January 1st, 2000.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
 #' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
-#' @param seed_degrees If TRUE, the seed is set before each draw of the number of outgoing transmissions per person. Defaults to FALSE. If TRUE, seed must have an integer value.
 #' @return A directory containing a single FASTA for all simulated cases, a FASTA consisting of the reference genome, VCF files for each simulated case, and the times of sample collection relative to the inoculation time of the first case (in days).
 #' @export
 
@@ -75,34 +74,10 @@ epi_sim <- function(
   include_root = TRUE,
   start_date = as.Date("2000-01-01"),
   outdir = "my_epidemic",
-  seed = NA,
-  seed_degrees = FALSE
+  seed = NA
 ){
 
-  a_g = 5
-  lambda_g = 1
-  a_s = 5
-  lambda_s = 1
-  R = 2
-  psi = 0.5
-  mu = 2e-5
-  N_eff = log(100)
-  init_genome = sample(c("A","C","G","T"), 10000, replace = T)
-  sample_dp = function(n){rep(10000, n)}
-  sample_sb = function(n){rep(0, n)}
-  min_af = 0.03
-  N = 1e6
-  p_samp = 0.5
-  n_obs = 100
-  include_root = FALSE
-  start_date = as.Date("2000-01-01")
-  outdir = "my_epidemic"
-  seed = 6
-  seed_degrees = TRUE
-
-  if(is.na(seed) & seed_degrees){
-    stop("A seed must be specified when seed_degrees = TRUE.")
-  }
+  input_n_obs <- n_obs
 
   if(!is.na(seed)){
     set.seed(seed)
@@ -152,9 +127,7 @@ epi_sim <- function(
   true_Rs <- c()
 
   # Generate kids
-  if(seed_degrees){
-    set.seed(seed + id)
-  }
+
   if(is.infinite(rho)){
     n_kids <- rpois(1, R)
   }else{
@@ -191,6 +164,11 @@ epi_sim <- function(
   # Number of cases generated thus far
   n_gen <- 0
 
+  if(length(checklist) == 0){
+    message("The epidemic ended before reaching ", input_n_obs, " people. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
+    return(FALSE)
+  }
+
   while (min(t[checklist]) < ifelse(length(s[sampled]) >= n_obs, sort(s[sampled])[n_obs], Inf)) {
 
     # Next host to update is the one with the earliest infection time
@@ -205,9 +183,7 @@ epi_sim <- function(
       ## Inherited genotype
 
       # Generate kids
-      if(seed_degrees){
-        set.seed(seed + id[i]) # To ensure seed changes after each iteration
-      }
+
       if(is.infinite(rho)){
         n_kids <- rpois(1, R)
       }else{
@@ -242,14 +218,15 @@ epi_sim <- function(
         message(n_gen, " cases generated")
       }
     }
+
+    # Alert the user if the epidemic ends due to no children left
+    if(length(checklist) == 0){
+      message("The epidemic ended before reaching ", input_n_obs, " people. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
+      return(FALSE)
+    }
   }
 
   t_max <- sort(s[sampled])[n_obs]
-
-  # Alert the user if the epidemic ends due to no children left
-  if(length(checklist) == 0){
-    message("The epidemic ended before reaching ", n_obs, " people. Consider re-running with a higher basic reproductive number (R) to avoid this behavior.")
-  }
 
   # Cases that we report: sampled cases before (or equal) to t_max
   complete <- which(sampled & s <= t_max)
@@ -584,6 +561,8 @@ epi_sim <- function(
       legend.position='none'
     )
   print(big)
+
+  return(TRUE)
 
 }
 
