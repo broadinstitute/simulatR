@@ -515,7 +515,7 @@ epi_sim <- function(
 
   # Write ref genome
   ref <- list(init_genome)
-  names(ref) <- "reference_genome"
+  names(ref) <- paste0("ref_genome|blah-blah-blah|", start_date)
   ape::write.dna(ref, file = paste0("./", outdir, "/ref.fasta"), format = "fasta")
 
   print(paste("Number of included hosts:", length(included)))
