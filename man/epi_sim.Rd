@@ -25,9 +25,9 @@ epi_sim(
   p_samp = 0.5,
   n_obs = 100,
   include_root = TRUE,
+  start_date = as.Date("2000-01-01"),
   outdir = "my_epidemic",
-  seed = NA,
-  seed_degrees = FALSE
+  seed = NA
 )
 }
 \arguments{
@@ -63,11 +63,11 @@ epi_sim(
 
 \item{include_root}{Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.}
 
+\item{start_date}{Date on which the first case is inoculated. Defaults to January 1st, 2000.}
+
 \item{outdir}{Name of the output directory. Defaults to "my_epidemic."}
 
 \item{seed}{If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.}
-
-\item{seed_degrees}{If TRUE, the seed is set before each draw of the number of outgoing transmissions per person. Defaults to FALSE. If TRUE, seed must have an integer value.}
 }
 \value{
 A directory containing a single FASTA for all simulated cases, a FASTA consisting of the reference genome, VCF files for each simulated case, and the times of sample collection relative to the inoculation time of the first case (in days).
