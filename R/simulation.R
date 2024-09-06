@@ -548,6 +548,10 @@ epi_sim <- function(
   colors <- rep('black', length(who))
   colors[!(included[who] %in% complete)] <- 'gray'
 
+  t_comp <- t_comp + start_date
+  xs <- xs + start_date
+  df_standard$x <- df_standard$x + start_date
+
   big <- ggplot2::ggplot() +
     ggplot2::geom_segment(mapping = ggplot2::aes(x = (t_comp[h_comp])[-1], xend = t_comp[-1], y = thetas[-1], yend = thetas[-1]), linewidth = 0.5) +
     ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
