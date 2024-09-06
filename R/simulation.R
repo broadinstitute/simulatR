@@ -556,7 +556,7 @@ epi_sim <- function(
     ggplot2::geom_segment(mapping = ggplot2::aes(x = (t_comp[h_comp])[-1], xend = t_comp[-1], y = thetas[-1], yend = thetas[-1]), linewidth = 0.5) +
     ggplot2::geom_segment(mapping = ggplot2::aes(x = xs, xend = xs, y = ystart, yend = yend), linewidth = 0.5) +
     ggplot2::geom_point(mapping = ggplot2::aes(x = df_standard$x, y = df_standard$y, color = colors), size = 1) +
-    ggplot2::xlab("Evolutionary Time (days)") +
+    ggplot2::xlab("Date") +
     ggplot2::scale_y_continuous(breaks = NULL) +
     ggplot2::scale_color_manual(values = c("black", "gray")) +
     ggplot2::theme_minimal() +
