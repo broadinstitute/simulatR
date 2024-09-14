@@ -38,6 +38,8 @@
 #' @param min_af Limit of detection for within-host variant frequencies.
 #' @param N The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.
 #' @param p_samp The probability of being sampled. Defaults to 0.5.
+#' @param trans_samp If not NA, a vector of length two specifying P(sampled | ancestor is sampled) and P(unsampled | ancestor is unsampled), or a vector of length 1 if these two are the same. The stationary distribution of the corresponding 2x2 transition matrix must equal (p_samp, 1 - p_samp).
+#' @param coverage Probability that a position on the genome is sequenced. Each position is an i.i.d. draw. Defaults to 1.
 #' @param n_obs The number of sampled cases to generate. Defaults to 100.
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
 #' @param start_date Date on which the first case is inoculated. Defaults to January 1st, 2000.
@@ -63,13 +65,15 @@ epi_sim <- function(
   R = 2,
   psi = 0.5,
   mu = 2e-5,
-  N_eff = log(1000), # Within-host N_eff
+  N_eff = log(100), # Within-host N_eff
   init_genome = sample(c("A","C","G","T"), 10000, replace = T),
   sample_dp = function(n){rep(10000, n)},
   sample_sb = function(n){rep(0, n)},
   min_af = 0.03, # Limit of detection for within host variants
   N = 1e6, # Population size
   p_samp = 0.5, # Probability of sampling
+  trans_samp = NA,
+  coverage = 1, # Sequence coverage
   n_obs = 100, # Number of sampled individuals to simulate
   include_root = TRUE,
   start_date = as.Date("2000-01-01"),
@@ -84,6 +88,28 @@ epi_sim <- function(
   }
 
   rho <- R * psi / (1 - psi)
+
+  # Transition matrix for sampling
+  if(!is.na(trans_samp)){
+
+    # If just one number supplied, it's the probability of staying in the same state
+    if(length(trans_samp) == 1){
+      trans_samp <- c(trans_samp, trans_samp)
+    }
+
+    # Create matrix of transition probabilities
+    trans_samp <- matrix(
+      c(trans_samp[1], 1 - trans_samp[1], 1 - trans_samp[2], trans_samp[2]),
+      ncol = 2,
+      byrow = TRUE
+    )
+
+    # Check that stationary probabiltit of being in sampled state equals p_samp
+    # This probabiltiy is...
+    if(p_samp != trans_samp[2, 1] / (1 - trans_samp[1, 1] + trans_samp[2, 1])){
+      stop("Probability of sampling p_samp does not match the stationary distribution of the transition matrix specified by trans_samp")
+    }
+  }
 
   # Length of viral genome
   N_bases = length(init_genome)
@@ -148,7 +174,16 @@ epi_sim <- function(
     h[who] <- 1
     t[who] <- t[1] + rgamma(length(who), a_g, lambda_g)
     s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-    sampled[who] <- runif(length(who)) < p_samp
+    if(is.na(trans_samp)){
+      sampled[who] <- runif(length(who)) < p_samp
+    }else{
+      if(sampled[1]){
+        sampled[who] <- runif(length(who)) < trans_samp[1, 1]
+      }else{
+        sampled[who] <- runif(length(who)) < trans_samp[2, 1]
+      }
+    }
+
 
     # Add kids to people who need to be accounted for
     checklist <- c(checklist, who)
@@ -201,7 +236,15 @@ epi_sim <- function(
         h[who] <- i
         t[who] <- t[i] + rgamma(length(who), a_g, lambda_g)
         s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-        sampled[who] <- runif(length(who)) < p_samp
+        if(is.na(trans_samp)){
+          sampled[who] <- runif(length(who)) < p_samp
+        }else{
+          if(sampled[i]){
+            sampled[who] <- runif(length(who)) < trans_samp[1, 1]
+          }else{
+            sampled[who] <- runif(length(who)) < trans_samp[2, 1]
+          }
+        }
 
         # Add kids to people who need to be accounted for
         checklist <- c(checklist, who)
@@ -473,10 +516,19 @@ epi_sim <- function(
       }
     }
 
+    # Finally: which sites are not included in the VCF because they were not sequenced?
+    dropout <- which(runif(length(init_genome)) < 1 - coverage)
+
+    isnv_af <- isnv_af[!(isnv_pos %in% dropout)]
+    isnv_from <- isnv_from[!(isnv_pos %in% dropout)]
+    isnv_to <- isnv_to[!(isnv_pos %in% dropout)]
+    isnv_pos <- isnv_pos[!(isnv_pos %in% dropout)]
+
     # Write VCF
     write_vcf(isnv_pos, isnv_af, isnv_from, isnv_to, id[i], outdir, sample_dp, sample_sb)
 
     # Append consensus sequence
+    bot[dropout] <- "N"
     cons[[i]] <- bot
   }
 

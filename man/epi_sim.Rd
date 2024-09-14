@@ -12,7 +12,7 @@ epi_sim(
   R = 2,
   psi = 0.5,
   mu = 2e-05,
-  N_eff = log(1000),
+  N_eff = log(100),
   init_genome = sample(c("A", "C", "G", "T"), 10000, replace = T),
   sample_dp = function(n) {
      rep(10000, n)
@@ -23,6 +23,8 @@ epi_sim(
   min_af = 0.03,
   N = 1e+06,
   p_samp = 0.5,
+  trans_samp = NA,
+  coverage = 1,
   n_obs = 100,
   include_root = TRUE,
   start_date = as.Date("2000-01-01"),
@@ -58,6 +60,10 @@ epi_sim(
 \item{N}{The size of the population. The population is assumed to be well-mixed, and to start with a single infectious individual. Defaults to 1e6.}
 
 \item{p_samp}{The probability of being sampled. Defaults to 0.5.}
+
+\item{trans_samp}{If not NA, a vector of length two specifying P(sampled | ancestor is sampled) and P(unsampled | ancestor is unsampled), or a vector of length 1 if these two are the same. The stationary distribution of the corresponding 2x2 transition matrix must equal (p_samp, 1 - p_samp).}
+
+\item{coverage}{Probability that a position on the genome is sequenced. Each position is an i.i.d. draw. Defaults to 1.}
 
 \item{n_obs}{The number of sampled cases to generate. Defaults to 100.}
 
