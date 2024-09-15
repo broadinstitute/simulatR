@@ -90,8 +90,10 @@ epi_sim <- function(
   rho <- R * psi / (1 - psi)
 
   # Transition matrix for sampling
-  if(!is.na(trans_samp)){
-
+  if(is.na(trans_samp)){
+    corr_sampling <- F
+  }else{
+    corr_sampling <- T
     # If just one number supplied, it's the probability of staying in the same state
     if(length(trans_samp) == 1){
       trans_samp <- c(trans_samp, trans_samp)
@@ -174,7 +176,7 @@ epi_sim <- function(
     h[who] <- 1
     t[who] <- t[1] + rgamma(length(who), a_g, lambda_g)
     s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-    if(is.na(trans_samp)){
+    if(!corr_sampling){
       sampled[who] <- runif(length(who)) < p_samp
     }else{
       if(sampled[1]){
@@ -236,7 +238,7 @@ epi_sim <- function(
         h[who] <- i
         t[who] <- t[i] + rgamma(length(who), a_g, lambda_g)
         s[who] <- t[who] + rgamma(length(who), a_s, lambda_s)
-        if(is.na(trans_samp)){
+        if(!corr_sampling){
           sampled[who] <- runif(length(who)) < p_samp
         }else{
           if(sampled[i]){
