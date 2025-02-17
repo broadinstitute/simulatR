@@ -297,6 +297,9 @@ epi_sim <- function(
   trans <- trans[!is.na(trans$from), ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
+
+  # Write adjacency matrix, indexed to the same coordinates as the genomes in the FASTA
+
   ## Plotting
 
   # Figure out who's included
@@ -442,7 +445,7 @@ epi_sim <- function(
     prop_mut <- rbeta(length(init_genome), 1, size_1st_mut)
 
     # Which of these sites have proportions that are above LOD?
-    # This step just saves time: we would never record proporitons under LOD anyway
+    # This step just saves time: we would never record proportions under LOD anyway
     above_lod <- which(prop_mut > min_af)
 
     ## Get genome at bottleneck
@@ -543,6 +546,17 @@ epi_sim <- function(
   }else{
     file.create(paste0("./", outdir, "/aligned.fasta"))
   }
+
+  ## Write adjacency matrix
+
+  # Transmissions between sampled cases
+  trans_complete <- trans
+  trans_complete <- trans_complete[trans_complete$from %in% paste0("person_", id[complete]) & trans_complete$to %in% paste0("person_", id[complete]), ]
+  adj <- matrix(0, nrow = length(complete), ncol = length(complete))
+  colnames(adj) <- paste0("person_", id[complete])
+  rownames(adj) <- paste0("person_", id[complete])
+  adj[cbind(trans_complete$from, trans_complete$to)] <- 1
+  write.table(adj, file = paste0("./", outdir, "/adjacency.csv"), col.names = F, row.names = F, quote = F, sep = ",")
 
   # Write ref genome
   ref <- list(init_genome)
