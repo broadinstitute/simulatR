@@ -44,6 +44,7 @@
 #' @param include_root Should the root (i.e. the first case to be seeded in the population) be included in the output FASTA and VCF files? Defaults to TRUE.
 #' @param start_date Date on which the first case is inoculated. Defaults to January 1st, 2000.
 #' @param outdir Name of the output directory. Defaults to "my_epidemic."
+#' @param write_adjacency Should an adjacency matrix of transmissions between sampled cases be output? Defaults to FALSE.
 #' @param seed If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.
 #' @return A directory containing a single FASTA for all simulated cases, a FASTA consisting of the reference genome, VCF files for each simulated case, and the times of sample collection relative to the inoculation time of the first case (in days).
 #' @export
@@ -78,6 +79,7 @@ epi_sim <- function(
   include_root = TRUE,
   start_date = as.Date("2000-01-01"),
   outdir = "my_epidemic",
+  write_adjacency = FALSE,
   seed = NA
 ){
 
@@ -297,8 +299,6 @@ epi_sim <- function(
   trans <- trans[!is.na(trans$from), ]
   write.csv(trans, file = paste0("./", outdir, "/transmission.csv"), row.names = F, quote = F)
 
-
-  # Write adjacency matrix, indexed to the same coordinates as the genomes in the FASTA
 
   ## Plotting
 
@@ -556,7 +556,10 @@ epi_sim <- function(
   colnames(adj) <- paste0("person_", id[complete])
   rownames(adj) <- paste0("person_", id[complete])
   adj[cbind(trans_complete$from, trans_complete$to)] <- 1
-  write.table(adj, file = paste0("./", outdir, "/adjacency.csv"), col.names = F, row.names = F, quote = F, sep = ",")
+
+  if(write_adjacency){
+    write.table(adj, file = paste0("./", outdir, "/adjacency.csv"), col.names = F, row.names = F, quote = F, sep = ",")
+  }
 
   # Write ref genome
   ref <- list(init_genome)

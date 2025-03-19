@@ -29,6 +29,7 @@ epi_sim(
   include_root = TRUE,
   start_date = as.Date("2000-01-01"),
   outdir = "my_epidemic",
+  write_adjacency = FALSE,
   seed = NA
 )
 }
@@ -72,6 +73,8 @@ epi_sim(
 \item{start_date}{Date on which the first case is inoculated. Defaults to January 1st, 2000.}
 
 \item{outdir}{Name of the output directory. Defaults to "my_epidemic."}
+
+\item{write_adjacency}{Should an adjacency matrix of transmissions between sampled cases be output? Defaults to FALSE.}
 
 \item{seed}{If integer, the seed is set to that integer. If NA, no seed is set. Defaults to NA.}
 }
